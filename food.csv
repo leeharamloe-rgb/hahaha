@@ -1,66 +1,51 @@
 import streamlit as st
 import pandas as pd
 
-st.title("🍱 음식 영양소 검색 시스템 (오류 해결 버전)")
+st.set_page_config(page_title="영양소 분석", layout="wide")
 
-# -----------------------
-# CSV 자동 인코딩 로딩
-# -----------------------
 @st.cache_data
 def load_data():
-    encodings = ["utf-8-sig", "cp949", "euc-kr"]
-    for enc in encodings:
-        try:
-            return pd.read_csv("food.csv", encoding=enc)
-        except:
-            pass
-    st.error("❌ CSV 파일을 어떤 인코딩으로도 읽을 수 없습니다.")
-    return None
+    # 자동으로 UTF-8 우선 시도 → 실패 시 CP949로 재시도
+    try:
+        return pd.read_csv("food.csv", encoding="utf-8")
+    except:
+        return pd.read_csv("food.csv", encoding="cp949")
 
 df = load_data()
 
-if df is None:
-    st.stop()
+st.title("🍎 음식 영양소 분석 & 추천 음식")
 
-st.success("데이터 로딩 완료!")
+# ------------------------------
+# 검색창
+# ------------------------------
+user_input = st.text_input("영양소를 알고 싶은 음식을 입력하세요:", "")
 
-# -----------------------
-# 식품명 컬럼 자동 탐색
-# -----------------------
-name_candidates = ["식품명", "식품 이름", "음식명", "제품명"]
-food_name_col = None
+if user_input:
+    # 입력한 음식 포함된 행 검색
+    result = df[df["음식"].str.contains(user_input, case=False, na=False)]
 
-for c in name_candidates:
-    if c in df.columns:
-        food_name_col = c
-        break
-
-if food_name_col is None:
-    st.error("❌ CSV 파일에서 식품명 컬럼을 찾지 못했습니다. 컬럼명을 알려주세요!")
-    st.stop()
-
-# 숫자형 컬럼 = 영양소
-numeric_cols = df.select_dtypes(include=["float64", "int64"]).columns.tolist()
-
-# -----------------------
-# 음식 검색
-# -----------------------
-st.subheader("🔍 음식 검색하기")
-
-search = st.text_input("음식 이름을 입력하세요:")
-
-if search:
-    result = df[df[food_name_col].str.contains(search, case=False, na=False)]
-
-    if result.empty:
-        st.warning("검색 결과가 없습니다!")
+    if len(result) == 0:
+        st.error("해당 음식 정보를 찾을 수 없습니다. 다시 입력해 주세요.")
     else:
-        st.success(f"{len(result)}개 결과 찾음")
-        st.write("🔽 검색 결과 (이름 목록)")
-        st.dataframe(result[[food_name_col]].head(20))
+        st.subheader("🔍 선택한 음식의 영양 정보")
+        st.dataframe(result)
 
-        # 첫 번째 항목 자동 선택
-        selected = result.iloc[0]
+        # ------------------------------
+        # 추천 음식 간단 로직
+        # ------------------------------
+        st.subheader("🥗 추천 음식")
 
-        st.subheader(f"📊 '{selected[food_name_col]}' 영양소 정보")
-        st.dataframe(selected[numeric_cols].to_frame("값"))
+        nutrition_cols = ["칼로리", "탄수화물", "단백질", "지방"]
+
+        # 영양소 컬럼이 모두 있을 때만 추천하기
+        if all(col in df.columns for col in nutrition_cols):
+            base = result[nutrition_cols].mean()
+
+            df["차이"] = (df[nutrition_cols] - base).abs().sum(axis=1)
+
+            rec = df.sort_values("차이").head(5)
+
+            st.write("선택한 음식과 영양소가 비슷한 추천 음식:")
+            st.dataframe(rec[["음식"] + nutrition_cols])
+        else:
+            st.info("⚠️ 추천 음식을 제공하려면 CSV에 칼로리/탄수화물/단백질/지방 컬럼이 필요합니다.")
