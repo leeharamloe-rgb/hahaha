@@ -4,6 +4,7 @@ import plotly.express as px
 
 # -----------------------
 # 데이터 불러오기
+# -----------------------
 st.title("🍱 식품 영양소 분석 대시보드")
 
 @st.cache_data
@@ -68,4 +69,3 @@ st.plotly_chart(fig, use_container_width=True)
 # -----------------------
 st.subheader("📄 선택한 영양소 수치 테이블")
 st.dataframe(df[[food_name_col, selected_nutrient]].sort_values(selected_nutrient, ascending=False))
-
