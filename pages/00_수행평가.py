@@ -1,70 +1,71 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 
-st.set_page_config(page_title="음식 영양소 분석기", layout="wide")
+# -----------------------
+# 데이터 불러오기
+# -----------------------
+st.title("🍱 식품 영양소 분석 대시보드")
 
-# --------------------------
-# CSV 파일 로드
-# --------------------------
 @st.cache_data
 def load_data():
-    # 여러 인코딩 자동 시도
-    for enc in ["utf-8", "cp949", "latin1"]:
-        try:
-            return pd.read_csv("food.csv", encoding=enc)
-        except:
-            pass
-    st.error("❌ CSV 파일을 읽는 중 오류가 발생했습니다.")
-    return None
+    return pd.read_csv("food.csv", encoding="cp949")
 
 df = load_data()
 
-st.title("🥗 음식 영양소 분석기")
-st.write("음식을 검색하면 영양 정보를 쉽게 보여주고, 함께 먹기 좋은 음식도 추천해드려요!")
+st.success("데이터 로딩 완료!")
 
-# --------------------------
-# 음식 검색 입력창
-# --------------------------
-search = st.text_input("🔍 영양소를 확인하고 싶은 음식을 입력하세요:")
+# -----------------------
+# 기본 정보 출력
+# -----------------------
+st.subheader("📌 데이터 미리보기")
+st.dataframe(df.head())
 
-if search:
-    # 사용자 입력 포함된 음식 찾기
-    result = df[df["음식"].str.contains(search, case=False, na=False)]
+# -----------------------
+# 영양소 컬럼 자동 추출
+# (수분, 단백질, 지방, 탄수화물 등 숫자형 컬럼)
+# -----------------------
+numeric_cols = df.select_dtypes(include=["float64", "int64"]).columns.tolist()
 
-    if result.empty:
-        st.error("❌ 해당 음식이 데이터에 없습니다.")
-    else:
-        # 첫 번째 결과 사용
-        food_row = result.iloc[0]
-        food_name = food_row["음식"]
+# 식품명 컬럼 찾기
+name_candidates = ["식품명", "음식명", "제품명"]
+food_name_col = None
+for c in name_candidates:
+    if c in df.columns:
+        food_name_col = c
+        break
 
-        st.subheader(f"🍱 '{food_name}' 영양 정보 요약")
+if food_name_col is None:
+   st.error("식품명 컬럼을 찾을 수 없습니다. CSV 파일 내 식품명 컬럼명을 알려주세요.")
+   st.stop()
 
-        # --------------------------
-        # 영양소 정보 테이블
-        # --------------------------
-        nutrient_cols = [c for c in df.columns if c != "음식"]
-        nutrients = food_row[nutrient_cols]
+# -----------------------
+# 영양소 선택 UI
+# -----------------------
+st.subheader("🥗 영양소 선택하여 음식별 비교하기")
 
-        summary = pd.DataFrame({
-            "영양소": nutrients.index,
-            "함량": nutrients.values
-        }).sort_values(by="함량", ascending=False)
+selected_nutrient = st.selectbox("영양소를 선택하세요:", numeric_cols)
 
-        st.dataframe(summary, use_container_width=True)
+# -----------------------
+# Plotly 그래프 생성
+# -----------------------
+fig = px.bar(
+    df.sort_values(selected_nutrient, ascending=False).head(30),
+    x=food_name_col,
+    y=selected_nutrient,
+    title=f"📊 음식별 '{selected_nutrient}' 값 비교 (상위 30개)",
+    labels={food_name_col: "식품명", selected_nutrient: selected_nutrient},
+)
 
-        # --------------------------
-        # 추천 음식 기능 (sklearn 없이 구현)
-        # 가장 높은 영양소 1개 기준으로 추천
-        # --------------------------
-        top_nutrient = summary.iloc[0]["영양소"]
+fig.update_layout(
+    xaxis_tickangle=45,
+    height=600
+)
 
-        st.subheader(f"✨ '{food_name}'와 궁합이 좋은 음식 추천")
-        st.write(f"➡️ '{top_nutrient}' 영양소가 풍부한 음식 기반 추천")
+st.plotly_chart(fig, use_container_width=True)
 
-        rec_df = df.sort_values(by=top_nutrient, ascending=False)
-
-        # 자신 제외
-        rec_df = rec_df[rec_df["음식"] != food_name].head(3)
-
-        st.table(rec_df[["음식", top_nutrient]])
+# -----------------------
+# 영양소 상세 보기
+# -----------------------
+st.subheader("📄 선택한 영양소 수치 테이블")
+st.dataframe(df[[food_name_col, selected_nutrient]].sort_values(selected_nutrient, ascending=False))
