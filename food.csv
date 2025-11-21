@@ -1,51 +1,70 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="영양소 분석", layout="wide")
+st.set_page_config(page_title="음식 영양소 분석기", layout="wide")
 
+# --------------------------
+# CSV 파일 읽기 (인코딩 오류 자동 처리)
+# --------------------------
 @st.cache_data
 def load_data():
-    # 자동으로 UTF-8 우선 시도 → 실패 시 CP949로 재시도
     try:
         return pd.read_csv("food.csv", encoding="utf-8")
     except:
-        return pd.read_csv("food.csv", encoding="cp949")
+        try:
+            return pd.read_csv("food.csv", encoding="cp949")
+        except:
+            return pd.read_csv("food.csv", encoding="latin1")
 
 df = load_data()
 
-st.title("🍎 음식 영양소 분석 & 추천 음식")
+st.title("🍽️ 음식 영양소 분석기")
+st.write("음식을 검색하면 영양소 정보를 간단하게 보여주고, 함께 먹으면 좋은 음식도 추천해줘요!")
 
-# ------------------------------
-# 검색창
-# ------------------------------
-user_input = st.text_input("영양소를 알고 싶은 음식을 입력하세요:", "")
+# --------------------------
+# 음식 검색
+# --------------------------
+food_list = df["음식"].unique()
+search = st.text_input("🔍 영양소를 알고 싶은 음식 이름을 입력하세요:")
 
-if user_input:
-    # 입력한 음식 포함된 행 검색
-    result = df[df["음식"].str.contains(user_input, case=False, na=False)]
+if search:
+    result = df[df["음식"].str.contains(search, case=False, na=False)]
 
-    if len(result) == 0:
-        st.error("해당 음식 정보를 찾을 수 없습니다. 다시 입력해 주세요.")
+    if result.empty:
+        st.error("❌ 해당 음식이 데이터에 없습니다. 이름을 다시 확인해 주세요.")
     else:
-        st.subheader("🔍 선택한 음식의 영양 정보")
-        st.dataframe(result)
+        food_name = result.iloc[0]["음식"]
+        st.subheader(f"🍜 {food_name} 영양 정보 요약")
 
-        # ------------------------------
-        # 추천 음식 간단 로직
-        # ------------------------------
-        st.subheader("🥗 추천 음식")
+        # --------------------------
+        # 영양소 간단 요약
+        # --------------------------
+        nutrient_cols = [col for col in df.columns if col != "음식"]
 
-        nutrition_cols = ["칼로리", "탄수화물", "단백질", "지방"]
+        nutrients = result[nutrient_cols].iloc[0]
 
-        # 영양소 컬럼이 모두 있을 때만 추천하기
-        if all(col in df.columns for col in nutrition_cols):
-            base = result[nutrition_cols].mean()
+        summary = pd.DataFrame({
+            "영양소": nutrients.index,
+            "함량": nutrients.values
+        })
 
-            df["차이"] = (df[nutrition_cols] - base).abs().sum(axis=1)
+        # 보기 쉽도록 정렬
+        summary = summary.sort_values(by="함량", ascending=False)
 
-            rec = df.sort_values("차이").head(5)
+        st.dataframe(summary, use_container_width=True)
 
-            st.write("선택한 음식과 영양소가 비슷한 추천 음식:")
-            st.dataframe(rec[["음식"] + nutrition_cols])
-        else:
-            st.info("⚠️ 추천 음식을 제공하려면 CSV에 칼로리/탄수화물/단백질/지방 컬럼이 필요합니다.")
+        # --------------------------
+        # 음식 궁합 추천 (가장 높은 영양소 기준)
+        # --------------------------
+        top_nutrient = summary.iloc[0]["영양소"]
+
+        st.subheader(f"✨ '{food_name}'와 잘 어울리는 추천 음식")
+
+        # top nutrient가 높은 음식 3개 추천
+        rec = df.sort_values(by=top_nutrient, ascending=False).head(5)
+
+        rec = rec[rec["음식"] != food_name].head(3)
+
+        st.write(f"➡️ **'{top_nutrient}' 영양소가 풍부한 음식 추천!**")
+
+        st.table(rec[["음식", top_nutrient]])
