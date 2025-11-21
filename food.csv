@@ -1,16 +1,26 @@
 import streamlit as st
 import pandas as pd
 
-# -----------------------
-# 데이터 불러오기
-# -----------------------
-st.title("🍱 음식 영양소 검색 시스템 (심플 버전)")
+st.title("🍱 음식 영양소 검색 시스템 (오류 해결 버전)")
 
+# -----------------------
+# CSV 자동 인코딩 로딩
+# -----------------------
 @st.cache_data
 def load_data():
-    return pd.read_csv("food.csv", encoding="cp949")
+    encodings = ["utf-8-sig", "cp949", "euc-kr"]
+    for enc in encodings:
+        try:
+            return pd.read_csv("food.csv", encoding=enc)
+        except:
+            pass
+    st.error("❌ CSV 파일을 어떤 인코딩으로도 읽을 수 없습니다.")
+    return None
 
 df = load_data()
+
+if df is None:
+    st.stop()
 
 st.success("데이터 로딩 완료!")
 
@@ -29,29 +39,28 @@ if food_name_col is None:
     st.error("❌ CSV 파일에서 식품명 컬럼을 찾지 못했습니다. 컬럼명을 알려주세요!")
     st.stop()
 
-# 숫자형 영양소 컬럼
+# 숫자형 컬럼 = 영양소
 numeric_cols = df.select_dtypes(include=["float64", "int64"]).columns.tolist()
 
 # -----------------------
-# 음식 검색 기능
+# 음식 검색
 # -----------------------
-st.subheader("🔍 음식 검색하기 (음식명 입력)")
+st.subheader("🔍 음식 검색하기")
 
-search = st.text_input("음식 이름을 입력하세요:", "")
+search = st.text_input("음식 이름을 입력하세요:")
 
 if search:
-    # 검색 결과 필터링
     result = df[df[food_name_col].str.contains(search, case=False, na=False)]
 
     if result.empty:
-        st.warning("검색 결과가 없습니다. 다른 키워드를 입력해주세요!")
+        st.warning("검색 결과가 없습니다!")
     else:
-        st.success(f"총 {len(result)}개의 검색 결과를 찾았습니다.")
-        st.dataframe(result[[food_name_col]].head(20))  # 이름 목록만 보여주기
+        st.success(f"{len(result)}개 결과 찾음")
+        st.write("🔽 검색 결과 (이름 목록)")
+        st.dataframe(result[[food_name_col]].head(20))
 
-        # 첫 번째 결과 자동 선택
-        selected_row = result.iloc[0]
+        # 첫 번째 항목 자동 선택
+        selected = result.iloc[0]
 
-        st.subheader(f"📊 '{selected_row[food_name_col]}' 영양소 정보")
-
-        st.dataframe(selected_row[numeric_cols].to_frame("값"))
+        st.subheader(f"📊 '{selected[food_name_col]}' 영양소 정보")
+        st.dataframe(selected[numeric_cols].to_frame("값"))
