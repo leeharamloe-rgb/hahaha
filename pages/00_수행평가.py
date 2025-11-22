@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="영양소 선택 조회", page_icon="🍎")
+st.set_page_config(page_title="영양소 조회 & 음식 추천", page_icon="🍎")
 
-st.title("🍎 음식별 영양소 조회")
+st.title("🍎 음식 영양소 조회 & 추천 조합")
 
 # -----------------------------
 # ✅ 실제 존재하는 음식 데이터
@@ -17,6 +17,20 @@ data = {
 }
 
 df = pd.DataFrame(data)
+
+# ✅ 추천 음식 매핑
+recommendations = {
+    "사과": ["요거트", "치즈"],
+    "바나나": ["우유", "요거트"],
+    "딸기": ["사과", "요거트"],
+    "우유": ["시리얼", "바나나"],
+    "요거트": ["딸기", "사과"],
+    "치즈": ["계란", "밥"],
+    "계란": ["밥", "치즈"],
+    "피자": ["콜라", "사이다"],
+    "라면": ["김치", "계란"],
+    "밥": ["계란", "김치"]
+}
 
 # ✅ 영양소 선택
 nutrient_option = st.selectbox(
@@ -38,9 +52,18 @@ if not food_option:
     st.info("👆 위에서 음식을 선택하면 영양소 정보가 표시됩니다.")
 else:
     filtered = df[df["음식"].isin(food_option)][["음식", nutrient_option]]
-
-    # ✅ 선택한 영양소 기준 정렬
     filtered = filtered.sort_values(by=nutrient_option, ascending=False)
 
     st.subheader(f"✅ 선택한 음식의 '{nutrient_option}' 비교 결과")
     st.table(filtered.set_index("음식"))
+
+    # ✅ 음식 추천 영역
+    st.subheader("🍽️ 추천 음식 조합")
+
+    for food in food_option:
+        recommended = recommendations.get(food, [])
+        if recommended:
+            st.write(f"🌟 **{food}** 와(과) 잘 어울리는 음식:")
+            st.success(", ".join(recommended))
+        else:
+            st.write(f"❓ **{food}** 는 추천 매칭 정보가 없어요.")
